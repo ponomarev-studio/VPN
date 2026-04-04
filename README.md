@@ -24,7 +24,7 @@ Fly VM (single container, three original entrypoints in parallel)
 
 1. The startup script (`start.sh`) configures networking and launches all three entrypoints:
    - **Tailscale** — runs [`containerboot`](https://pkg.go.dev/tailscale.com/cmd/containerboot) (the original entrypoint from `tailscale/tailscale`) in the background. Env vars `TS_STATE_DIR`, `TS_SOCKET`, `TS_EXTRA_ARGS`, and `TS_HOSTNAME` are set inline; `TS_AUTHKEY` flows from the system environment.
-   - **MTProxy** — after Tailscale connects, runs the original [`/run.sh`](https://hub.docker.com/r/telegrammessenger/proxy/) in the background with `IP` set to the Tailscale IPv4 address. All other MTProxy env vars (`SECRET`, `TAG`, etc.) flow from the system environment.
+   - **MTProxy** — after Tailscale connects, runs the original [`/run.sh`](https://hub.docker.com/r/telegrammessenger/proxy/) in the background with `IP` set to the Tailscale DNS name derived from the node `DNSName`. All other MTProxy env vars (`SECRET`, `TAG`, etc.) flow from the system environment.
    - **ProxyT** — the script sets up [Tailscale Funnel](https://tailscale.com/kb/1223/funnel), logs connection links, then `exec`s into [`proxyt`](https://github.com/jaxxstorm/proxyt) as the foreground process.
 2. **Persistent state** is stored on a Fly volume mounted at `/data` — Tailscale identity and MTProxy secrets survive restarts.
 
@@ -96,7 +96,7 @@ All [official MTProxy environment variables](https://hub.docker.com/r/telegramme
 
 ## Volume
 
-All persistent state is stored on a [Fly volume](https://fly.io/docs/volumes/) (`vpn_data`) mounted at `/data`:
+All persistent state is stored on a [Fly volume](https://fly.io/docs/volumes/) (`vpn`) mounted at `/data`:
 
 | Path | Description |
 |---|---|

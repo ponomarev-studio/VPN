@@ -6,7 +6,7 @@ primary_region = 'ams'
   source = "vpn"
   destination = "/data"
 
-[[restart]]
+[restart]
   policy = "always"
 
 [[vm]]

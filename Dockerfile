@@ -1,10 +1,10 @@
 # Build MTProxy binary from source (native Alpine build)
 # https://github.com/TelegramMessenger/MTProxy
 FROM alpine:latest AS mtproxy
-RUN apk add --no-cache git make gcc musl-dev linux-headers openssl-dev zlib-dev
+RUN apk add --no-cache git make gcc musl-dev linux-headers openssl-dev zlib-dev coreutils
 RUN git clone https://github.com/TelegramMessenger/MTProxy.git /src
 WORKDIR /src
-RUN make -j$(nproc)
+RUN make -j"$(nproc 2>/dev/null || echo 4)"
 
 # Base image: Tailscale (Alpine-based, includes iptables and iproute2)
 # Entrypoint: /usr/local/bin/containerboot
@@ -12,7 +12,7 @@ RUN make -j$(nproc)
 FROM tailscale/tailscale:latest
 
 # Runtime dependencies for MTProxy entrypoint (/run.sh)
-RUN apk add --no-cache bash curl grep
+RUN apk add --no-cache bash curl grep jq
 
 # Copy MTProxy binary (built natively for Alpine)
 COPY --from=mtproxy /src/objs/bin/mtproto-proxy /bin/mtproto-proxy
