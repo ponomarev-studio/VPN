@@ -7,6 +7,7 @@ WORKDIR /src
 RUN make -j$(nproc)
 
 # Base image: Tailscale (Alpine-based, includes iptables and iproute2)
+# Entrypoint: /usr/local/bin/containerboot
 # https://hub.docker.com/r/tailscale/tailscale
 FROM tailscale/tailscale:latest
 
@@ -22,10 +23,10 @@ COPY --from=telegrammessenger/proxy:latest /run.sh /run.sh
 # Copy ProxyT binary from the official image on GHCR
 COPY --from=ghcr.io/jaxxstorm/proxyt:latest /ko-app/proxyt /app/proxyt
 
-# Create required directories
-RUN mkdir -p /var/run/tailscale /data
+# Create persistent data directory
+RUN mkdir -p /data
 
-# Copy startup script
+# Copy startup script (orchestrates all three entrypoints)
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 

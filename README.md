@@ -1,31 +1,32 @@
 # VPN
 
-Run [Tailscale](https://tailscale.com/) (Exit Node, SSH), [ProxyT](https://github.com/jaxxstorm/proxyt) (via Tailscale Funnel), and [Telegram MTProxy](https://hub.docker.com/r/telegrammessenger/proxy/) together on a single [Fly.io](https://fly.io/) VM as three parallel processes.
+Run [Tailscale](https://tailscale.com/) (Exit Node, SSH), [ProxyT](https://github.com/jaxxstorm/proxyt) (via Tailscale Funnel), and [Telegram MTProxy](https://hub.docker.com/r/telegrammessenger/proxy/) together on a single [Fly.io](https://fly.io/) VM — each using its original entrypoint.
 
 No public IP or `*.fly.dev` domain is used — all services are exposed exclusively through Tailscale.
 
 ## Architecture
 
 ```
-Fly VM (single container, three parallel processes)
-  ├── tailscaled (background, from base image)
+Fly VM (single container, three original entrypoints in parallel)
+  ├── containerboot (background) — original Tailscale entrypoint
   │     ├── Exit Node + SSH
   │     └── State → /data/tailscale (persistent volume)
-  ├── proxyt (background)
-  │     ├── HTTP proxy on 127.0.0.1:8080
-  │     ├── Domain auto-detected from Tailscale
-  │     └── Publicly accessible via Tailscale Funnel
-  └── mtproto-proxy (foreground, original /run.sh entrypoint)
-        ├── Telegram MTProxy on 0.0.0.0:443
-        └── Accessible via Tailscale DNS name
+  ├── /run.sh (background) — original MTProxy entrypoint
+  │     ├── Telegram MTProxy on 0.0.0.0:443
+  │     └── Accessible via Tailscale DNS name
+  └── proxyt (foreground) — original ProxyT entrypoint
+        ├── HTTP proxy on 127.0.0.1:8080
+        ├── Domain auto-detected from Tailscale
+        └── Publicly accessible via Tailscale Funnel
 ```
 
 ### How it works
 
-- **Tailscale** is the base image — binaries come directly from the official [`tailscale/tailscale:latest`](https://hub.docker.com/r/tailscale/tailscale) image (Alpine-based). The VM joins the Tailnet as an exit node with SSH access.
-- **ProxyT** runs in HTTP-only mode on port 8080, publicly accessible via [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) at `https://<hostname>.<tailnet>.ts.net`.
-- **MTProxy** uses the original [`/run.sh`](https://hub.docker.com/r/telegrammessenger/proxy/) entrypoint from the official MTProxy image. The Tailscale IP is passed as `IP` so that `tg://` and `t.me` links are generated correctly. The `mtproto-proxy` binary is built from [source](https://github.com/TelegramMessenger/MTProxy) for Alpine compatibility.
-- **Persistent state** is stored on a Fly volume mounted at `/data` — Tailscale identity and MTProxy secrets survive restarts without `persist_rootfs`.
+1. The startup script (`start.sh`) configures networking and launches all three entrypoints:
+   - **Tailscale** — runs [`containerboot`](https://pkg.go.dev/tailscale.com/cmd/containerboot) (the original entrypoint from `tailscale/tailscale`) in the background. Env vars `TS_STATE_DIR`, `TS_SOCKET`, `TS_EXTRA_ARGS`, and `TS_HOSTNAME` are set inline; `TS_AUTHKEY` flows from the system environment.
+   - **MTProxy** — after Tailscale connects, runs the original [`/run.sh`](https://hub.docker.com/r/telegrammessenger/proxy/) in the background with `IP` set to the Tailscale IPv4 address. All other MTProxy env vars (`SECRET`, `TAG`, etc.) flow from the system environment.
+   - **ProxyT** — the script sets up [Tailscale Funnel](https://tailscale.com/kb/1223/funnel), logs connection links, then `exec`s into [`proxyt`](https://github.com/jaxxstorm/proxyt) as the foreground process.
+2. **Persistent state** is stored on a Fly volume mounted at `/data` — Tailscale identity and MTProxy secrets survive restarts.
 
 ## Prerequisites
 
@@ -65,12 +66,15 @@ Once deployed, ProxyT will be publicly available via Tailscale Funnel at `https:
 
 ### Tailscale
 
+All [containerboot environment variables](https://tailscale.com/docs/features/containers/docker/docker-params) are supported. The following are set by `start.sh`:
+
 | Variable | Default | Description |
 |---|---|---|
 | `TS_AUTHKEY` | *(required, secret)* | Tailscale auth key for joining the Tailnet |
 | `TS_HOSTNAME` | `${FLY_REGION}` or `vpn` | Tailscale node hostname |
-
-Exit node (`--advertise-exit-node`) and SSH (`--ssh`) are always enabled.
+| `TS_STATE_DIR` | `/data/tailscale` | State directory (set inline by `start.sh`) |
+| `TS_SOCKET` | `/var/run/tailscale/tailscaled.sock` | Socket path (set inline by `start.sh`) |
+| `TS_EXTRA_ARGS` | `--advertise-exit-node --ssh` | Extra `tailscale up` flags (set inline by `start.sh`) |
 
 ### MTProxy
 
@@ -103,15 +107,19 @@ All persistent state is stored on a [Fly volume](https://fly.io/docs/volumes/) (
 
 ## Docker Image
 
-The image is based on [`tailscale/tailscale:latest`](https://hub.docker.com/r/tailscale/tailscale) (Alpine-based) with additional binaries:
+The image is based on [`tailscale/tailscale:latest`](https://hub.docker.com/r/tailscale/tailscale) (Alpine-based). Each service uses its original entrypoint:
+
+| Entrypoint | Source | Purpose |
+|---|---|---|
+| `/usr/local/bin/containerboot` | Base image (`tailscale/tailscale:latest`) | Tailscale daemon (manages `tailscaled` + `tailscale up`) |
+| `/run.sh` | `telegrammessenger/proxy:latest` | MTProxy entrypoint (manages secrets, config, `mtproto-proxy`) |
+| `/app/proxyt` | `ghcr.io/jaxxstorm/proxyt:latest` | ProxyT HTTP proxy |
+
+Additional binary:
 
 | Binary | Source | Purpose |
 |---|---|---|
-| `/usr/local/bin/tailscale` | Base image (`tailscale/tailscale:latest`) | Tailscale CLI |
-| `/usr/local/bin/tailscaled` | Base image (`tailscale/tailscale:latest`) | Tailscale daemon |
-| `/bin/mtproto-proxy` | Built from [source](https://github.com/TelegramMessenger/MTProxy) | Telegram MTProxy server |
-| `/run.sh` | `telegrammessenger/proxy:latest` | Original MTProxy entrypoint |
-| `/app/proxyt` | `ghcr.io/jaxxstorm/proxyt:latest` | ProxyT HTTP proxy |
+| `/bin/mtproto-proxy` | Built from [source](https://github.com/TelegramMessenger/MTProxy) | Telegram MTProxy server (called by `/run.sh`) |
 
 ## Security
 
