@@ -20,6 +20,12 @@ COPY --from=docker.io/tailscale/tailscale:latest /usr/local/bin/tailscale /usr/l
 # https://github.com/jaxxstorm/proxyt
 COPY --from=ghcr.io/jaxxstorm/proxyt:latest /ko-app/proxyt /app/proxyt
 
+# Patch /run.sh: default port 1234, use INTERNAL_IP for NAT when IP is a domain
+RUN sed -i \
+    -e 's/PORT=${PORT:-"443"}/PORT=${PORT:-"1234"}/' \
+    -e 's/--nat-info "$INTERNAL_IP:$IP"/--nat-info "$INTERNAL_IP:$INTERNAL_IP"/' \
+    /run.sh
+
 # Create required directories
 RUN mkdir -p /data /var/run/tailscale /var/cache/tailscale /var/lib/tailscale
 
