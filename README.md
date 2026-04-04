@@ -1,36 +1,36 @@
 # VPN
 
-Run [Tailscale](https://tailscale.com/) (Exit Node, SSH), [ProxyT](https://github.com/jaxxstorm/proxyt) (via Tailscale Funnel), and [Telegram MTProxy](https://hub.docker.com/r/telegrammessenger/proxy/) together on a single [Fly.io](https://fly.io/) Machine using [multi-container setup](https://fly.io/docs/machines/guides-examples/multi-container-machines/).
+Run [Tailscale](https://tailscale.com/) (Exit Node, SSH), [ProxyT](https://github.com/jaxxstorm/proxyt) (via Tailscale Funnel), and [Telegram MTProxy](https://hub.docker.com/r/telegrammessenger/proxy/) together on a single [Fly.io](https://fly.io/) VM as three parallel processes.
 
 No public IP or `*.fly.dev` domain is used — all services are exposed exclusively through Tailscale.
 
 ## Architecture
 
 ```
-Fly Machine (multi-container, shared network)
-  ├── tailscale (docker.io/tailscale/tailscale:stable)
+Fly VM (single container, three parallel processes)
+  ├── tailscaled (background)
   │     ├── Exit Node + SSH
-  │     ├── Funnel → 127.0.0.1:8080 (ProxyT)
   │     └── State → /data/tailscale (persistent volume)
-  ├── proxyt (built from Dockerfile)
+  ├── proxyt (background)
   │     ├── HTTP proxy on 127.0.0.1:8080
   │     ├── Domain auto-detected from Tailscale
   │     └── Publicly accessible via Tailscale Funnel
-  └── mtproxy (telegrammessenger/proxy:latest)
+  └── mtproto-proxy (foreground)
         ├── Telegram MTProxy on 0.0.0.0:443
+        ├── Host extracted from Tailscale for tg:// links
         └── Accessible via Tailscale IP on port 443
 ```
 
 ### How it works
 
-- **Tailscale** connects the Machine to your Tailnet as an exit node with SSH access. A shared socket (`/shared/tailscale.sock`) allows other containers to interact with the Tailscale daemon.
-- **ProxyT** waits for Tailscale to become healthy, configures [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) to expose port 8080, auto-detects its domain from Tailscale, and runs in HTTP-only mode. It is publicly accessible at `https://<hostname>.<tailnet>.ts.net`.
-- **MTProxy** runs the official Telegram MTProxy image unmodified. It listens on port 443 and is accessible via the Tailscale IP within the Tailnet.
-- **Inter-container communication** uses a shared temporary volume (`/shared`) for the Tailscale socket, and a persistent Fly volume (`/data`) for Tailscale and MTProxy state.
+- **Tailscale** connects the VM to your Tailnet as an exit node with SSH access. The domain and IP are extracted and passed to both ProxyT and MTProxy.
+- **ProxyT** runs in HTTP-only mode on port 8080, publicly accessible via [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) at `https://<hostname>.<tailnet>.ts.net`.
+- **MTProxy** runs the official [`mtproto-proxy`](https://hub.docker.com/r/telegrammessenger/proxy/) binary on port 443. Connection links (`tg://` and `t.me`) use the Tailscale domain and IP. Accessible via the Tailscale IP within the Tailnet.
+- **Persistent state** is stored on a Fly volume mounted at `/data` — Tailscale identity, MTProxy secrets, and proxy configs survive restarts without `persist_rootfs`.
 
 ## Prerequisites
 
-- [Fly CLI](https://fly.io/docs/flyctl/install/) (`flyctl`) v0.3.147+
+- [Fly CLI](https://fly.io/docs/flyctl/install/) (`flyctl`)
 - A [Fly.io](https://fly.io/) account
 - A [Tailscale](https://tailscale.com/) account with an [auth key](https://tailscale.com/kb/1085/auth-keys)
 
@@ -60,29 +60,31 @@ Fly Machine (multi-container, shared network)
    fly deploy
    ```
 
-Once deployed, ProxyT will be publicly available via Tailscale Funnel at `https://<region>.<tailnet>.ts.net`. MTProxy will be accessible via the Tailscale IP on port 443. View logs with `fly logs` to see the MTProxy connection links.
+Once deployed, ProxyT will be publicly available via Tailscale Funnel at `https://<region>.<tailnet>.ts.net`. MTProxy connection links (`tg://` and `t.me`) will appear in `fly logs` — they use the Tailscale domain and IP.
 
 ## Configuration
 
 ### Tailscale
 
-The Tailscale container uses the official [`tailscale/tailscale:stable`](https://hub.docker.com/r/tailscale/tailscale) image. All [official environment variables](https://tailscale.com/kb/1282/docker) are supported:
+All [official Tailscale Docker environment variables](https://tailscale.com/kb/1282/docker) are supported, plus the legacy `TAILSCALE_AUTHKEY` / `TAILSCALE_HOSTNAME` aliases:
 
 | Variable | Default | Description |
 |---|---|---|
 | `TS_AUTHKEY` | *(required, secret)* | Tailscale auth key for joining the Tailnet |
 | `TS_HOSTNAME` | `${FLY_REGION}` | Tailscale node hostname (defaults to the Fly.io region) |
-| `TS_EXTRA_ARGS` | `--advertise-exit-node --ssh` | Extra arguments for `tailscale set` |
 | `TS_STATE_DIR` | `/data/tailscale` | State directory (on persistent volume) |
-| `TS_SOCKET` | `/shared/tailscale.sock` | Daemon socket path (on shared volume) |
-| `TS_USERSPACE` | *(unset)* | Set to `true` for userspace networking |
+| `TS_SOCKET` | `/var/run/tailscale/tailscaled.sock` | Daemon socket path |
 | `TS_ROUTES` | *(unset)* | Subnet routes to advertise |
-| `TS_SERVE_CONFIG` | *(unset)* | Path to serve/funnel config JSON |
-| `TS_DEST_IP` | *(unset)* | Destination IP for proxy mode |
+| `TS_ACCEPT_DNS` | *(unset)* | Accept DNS settings from the Tailnet |
+| `TS_EXTRA_ARGS` | *(unset)* | Extra arguments for `tailscale up` |
+| `TAILSCALE_AUTHKEY` | *(unset)* | Alias for `TS_AUTHKEY` |
+| `TAILSCALE_HOSTNAME` | *(unset)* | Alias for `TS_HOSTNAME` |
+
+Exit node (`--advertise-exit-node`) and SSH (`--ssh`) are always enabled.
 
 ### MTProxy
 
-The MTProxy container uses the official [`telegrammessenger/proxy`](https://hub.docker.com/r/telegrammessenger/proxy/) image. All official environment variables are supported:
+All [official MTProxy environment variables](https://hub.docker.com/r/telegrammessenger/proxy/) are supported:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -90,7 +92,6 @@ The MTProxy container uses the official [`telegrammessenger/proxy`](https://hub.
 | `SECRET_COUNT` | `1` | Number of secrets to auto-generate (1–16) |
 | `TAG` | *(none)* | Advertisement tag from [@MTProxybot](https://t.me/mtproxybot) |
 | `WORKERS` | `2` | Number of MTProxy worker processes |
-| `DEBUG` | *(none)* | Set to any value to enable debug output |
 
 ### ProxyT
 
@@ -112,42 +113,27 @@ The MTProxy container uses the official [`telegrammessenger/proxy`](https://hub.
 
 ## Volume
 
-Tailscale and MTProxy state is persisted on a [Fly volume](https://fly.io/docs/volumes/) mounted at `/data`. The volume is automatically created on first deploy via the `[mounts]` section in `fly.toml`.
+All persistent state is stored on a [Fly volume](https://fly.io/docs/volumes/) (`vpn_data`) mounted at `/data`:
 
-The persistent volume stores:
-- `/data/tailscale/` — Tailscale node identity and state
-- `/data/secret` — MTProxy secret (auto-generated)
+| Path | Description |
+|---|---|
+| `/data/tailscale/` | Tailscale node identity and state |
+| `/data/secret` | MTProxy secret (auto-generated) |
+| `/data/proxy-secret` | MTProxy proxy secret (downloaded from Telegram) |
+| `/data/proxy-multi.conf` | MTProxy multi-DC config (downloaded from Telegram) |
 
-This ensures the Tailscale node identity and MTProxy secret survive restarts and redeploys without `persist_rootfs`.
+This ensures the Tailscale node identity and MTProxy secrets survive restarts and redeploys without `persist_rootfs`.
 
-## Multi-container Setup
+## Docker Image
 
-This project uses Fly.io [multi-container Machines](https://fly.io/docs/machines/guides-examples/multi-container-machines/) with three containers running on a single VM:
+The image is based on [`telegrammessenger/proxy:latest`](https://hub.docker.com/r/telegrammessenger/proxy/) (official Telegram MTProxy image) with additional binaries:
 
-| Container | Image | Role |
+| Binary | Source | Type |
 |---|---|---|
-| `tailscale` | `docker.io/tailscale/tailscale:stable` | Tailscale daemon (exit node, SSH, funnel) |
-| `proxyt` | Built from `Dockerfile` | ProxyT HTTP proxy (exposed via funnel) |
-| `mtproxy` | `telegrammessenger/proxy:latest` | Telegram MTProxy (accessible via Tailnet) |
-
-The `cli-config.json` defines the container configuration, dependencies, health checks, and shared volumes. The `fly.toml` references it via `[experimental] machine_config`.
-
-### Container Dependencies
-
-```
-tailscale ──(healthy)──► proxyt
-tailscale ──(healthy)──► mtproxy
-```
-
-- **ProxyT** waits for Tailscale to pass its health check before starting.
-- **MTProxy** waits for Tailscale to pass its health check before starting.
-
-### Shared Volumes
-
-| Volume | Type | Path | Purpose |
-|---|---|---|---|
-| `shared` | Temp dir (10 MB) | `/shared` | Tailscale socket for inter-container communication |
-| `tailscale_data` | Fly volume | `/data` | Persistent state for Tailscale and MTProxy |
+| `/opt/MTProxy/objs/bin/mtproto-proxy` | Base image | C (native) |
+| `/app/tailscaled` | `docker.io/tailscale/tailscale:stable` | Go (static) |
+| `/app/tailscale` | `docker.io/tailscale/tailscale:stable` | Go (static) |
+| `/app/proxyt` | `ghcr.io/jaxxstorm/proxyt:latest` | Go (static) |
 
 ## Security
 
@@ -156,4 +142,3 @@ tailscale ──(healthy)──► mtproxy
 - MTProxy is accessible only within the Tailnet (via the node's Tailscale IP).
 - Tailscale state is persisted on a Fly volume so the node identity survives restarts.
 - IPv4/IPv6 forwarding and NAT masquerading are enabled for exit node functionality.
-- Each container runs in its own isolated process tree.

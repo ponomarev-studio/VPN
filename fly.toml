@@ -2,12 +2,8 @@ app = 'vpn-ps'
 primary_region = 'ams'
 swap_size_mb = 256
 
-[experimental]
-  machine_config = 'cli-config.json'
-  container = 'proxyt'
-
 [mounts]
-  source = "tailscale_data"
+  source = "vpn_data"
   destination = "/data"
 
 [[restart]]
