@@ -1,27 +1,32 @@
-# Based on the official Telegram MTProxy image
-# https://hub.docker.com/r/telegrammessenger/proxy
-FROM telegrammessenger/proxy:latest
+# Build MTProxy binary from source (native Alpine build)
+# https://github.com/TelegramMessenger/MTProxy
+FROM alpine:latest AS mtproxy
+RUN apk add --no-cache git make gcc musl-dev linux-headers openssl-dev zlib-dev
+RUN git clone https://github.com/TelegramMessenger/MTProxy.git /src
+WORKDIR /src
+RUN make -j$(nproc)
 
-# Fix archived Debian Jessie repos and install packages for exit node
-RUN echo "deb http://archive.debian.org/debian jessie main" > /etc/apt/sources.list && \
-    apt-get -o Acquire::Check-Valid-Until=false update && \
-    apt-get install -y --allow-unauthenticated --no-install-recommends iptables kmod && \
-    rm -rf /var/lib/apt/lists/*
+# Base image: Tailscale (Alpine-based, includes iptables and iproute2)
+# https://hub.docker.com/r/tailscale/tailscale
+FROM tailscale/tailscale:latest
 
-# Copy Tailscale binaries from the official image on Docker Hub
-COPY --from=docker.io/tailscale/tailscale:latest /usr/local/bin/tailscaled /app/tailscaled
-COPY --from=docker.io/tailscale/tailscale:latest /usr/local/bin/tailscale /app/tailscale
+# Runtime dependencies for MTProxy entrypoint (/run.sh)
+RUN apk add --no-cache bash curl grep
+
+# Copy MTProxy binary (built natively for Alpine)
+COPY --from=mtproxy /src/objs/bin/mtproto-proxy /bin/mtproto-proxy
+
+# Copy original MTProxy entrypoint script from the official image
+COPY --from=telegrammessenger/proxy:latest /run.sh /run.sh
 
 # Copy ProxyT binary from the official image on GHCR
 COPY --from=ghcr.io/jaxxstorm/proxyt:latest /ko-app/proxyt /app/proxyt
 
 # Create required directories
-RUN mkdir -p /var/run/tailscale /var/cache/tailscale /var/lib/tailscale /data/tailscale
+RUN mkdir -p /var/run/tailscale /data
 
 # Copy startup script
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
-
-USER root
 
 CMD ["/bin/bash", "/app/start.sh"]

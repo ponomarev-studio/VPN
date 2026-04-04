@@ -8,7 +8,7 @@ No public IP or `*.fly.dev` domain is used — all services are exposed exclusiv
 
 ```
 Fly VM (single container, three parallel processes)
-  ├── tailscaled (background)
+  ├── tailscaled (background, from base image)
   │     ├── Exit Node + SSH
   │     └── State → /data/tailscale (persistent volume)
   ├── proxyt (background)
@@ -22,9 +22,9 @@ Fly VM (single container, three parallel processes)
 
 ### How it works
 
-- **Tailscale** connects the VM to your Tailnet as an exit node with SSH access.
+- **Tailscale** is the base image — binaries come directly from the official [`tailscale/tailscale:latest`](https://hub.docker.com/r/tailscale/tailscale) image (Alpine-based). The VM joins the Tailnet as an exit node with SSH access.
 - **ProxyT** runs in HTTP-only mode on port 8080, publicly accessible via [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) at `https://<hostname>.<tailnet>.ts.net`.
-- **MTProxy** uses the original [`/run.sh`](https://hub.docker.com/r/telegrammessenger/proxy/) entrypoint from the base image. The Tailscale IP is passed as `IP` so that `tg://` and `t.me` links are generated correctly. Accessible via the Tailscale DNS name on port 443.
+- **MTProxy** uses the original [`/run.sh`](https://hub.docker.com/r/telegrammessenger/proxy/) entrypoint from the official MTProxy image. The Tailscale IP is passed as `IP` so that `tg://` and `t.me` links are generated correctly. The `mtproto-proxy` binary is built from [source](https://github.com/TelegramMessenger/MTProxy) for Alpine compatibility.
 - **Persistent state** is stored on a Fly volume mounted at `/data` — Tailscale identity and MTProxy secrets survive restarts without `persist_rootfs`.
 
 ## Prerequisites
@@ -103,14 +103,14 @@ All persistent state is stored on a [Fly volume](https://fly.io/docs/volumes/) (
 
 ## Docker Image
 
-The image is based on [`telegrammessenger/proxy:latest`](https://hub.docker.com/r/telegrammessenger/proxy/) with additional binaries:
+The image is based on [`tailscale/tailscale:latest`](https://hub.docker.com/r/tailscale/tailscale) (Alpine-based) with additional binaries:
 
 | Binary | Source | Purpose |
 |---|---|---|
-| `/bin/mtproto-proxy` | Base image | Telegram MTProxy server |
-| `/run.sh` | Base image | Original MTProxy entrypoint |
-| `/app/tailscaled` | `docker.io/tailscale/tailscale:latest` | Tailscale daemon |
-| `/app/tailscale` | `docker.io/tailscale/tailscale:latest` | Tailscale CLI |
+| `/usr/local/bin/tailscale` | Base image (`tailscale/tailscale:latest`) | Tailscale CLI |
+| `/usr/local/bin/tailscaled` | Base image (`tailscale/tailscale:latest`) | Tailscale daemon |
+| `/bin/mtproto-proxy` | Built from [source](https://github.com/TelegramMessenger/MTProxy) | Telegram MTProxy server |
+| `/run.sh` | `telegrammessenger/proxy:latest` | Original MTProxy entrypoint |
 | `/app/proxyt` | `ghcr.io/jaxxstorm/proxyt:latest` | ProxyT HTTP proxy |
 
 ## Security
