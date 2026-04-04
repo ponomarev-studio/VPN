@@ -52,7 +52,7 @@ done
 TS_DOMAIN=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
 
 # MTProxy — original entrypoint (/run.sh) in background
-IP=$TS_DOMAIN /run.sh &
+PORT=1234 IP=$TS_DOMAIN /run.sh &
 PIDS+=("$!")
 
 # ProxyT — via Tailscale Funnel
