@@ -9,8 +9,8 @@ RUN echo "deb http://archive.debian.org/debian jessie main" > /etc/apt/sources.l
     rm -rf /var/lib/apt/lists/*
 
 # Copy Tailscale binaries from the official image on Docker Hub
-COPY --from=docker.io/tailscale/tailscale:stable /usr/local/bin/tailscaled /app/tailscaled
-COPY --from=docker.io/tailscale/tailscale:stable /usr/local/bin/tailscale /app/tailscale
+COPY --from=docker.io/tailscale/tailscale:latest /usr/local/bin/tailscaled /app/tailscaled
+COPY --from=docker.io/tailscale/tailscale:latest /usr/local/bin/tailscale /app/tailscale
 
 # Copy ProxyT binary from the official image on GHCR
 COPY --from=ghcr.io/jaxxstorm/proxyt:latest /ko-app/proxyt /app/proxyt
