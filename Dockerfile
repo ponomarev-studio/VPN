@@ -1,51 +1,27 @@
-# Build MTProxy binary from source (native Alpine build)
-# https://github.com/TelegramMessenger/MTProxy
-FROM alpine:latest AS mtproxy
-RUN apk add --no-cache git make gcc musl-dev linux-headers openssl-dev zlib-dev coreutils
-RUN git clone https://github.com/TelegramMessenger/MTProxy.git /src
-WORKDIR /src
+# Based on the official Telegram MTProxy image (Debian-based)
+# Includes: mtproto-proxy binary + /run.sh entrypoint
+# https://hub.docker.com/r/telegrammessenger/proxy
+FROM telegrammessenger/proxy:latest
 
-# musl compatibility: provide glibc-only drand48_r reentrant functions and struct
-RUN printf '%s\n' \
-  '#ifndef MUSL_COMPAT_H' \
-  '#define MUSL_COMPAT_H' \
-  '#ifndef __GLIBC__' \
-  '#include <stdlib.h>' \
-  'struct drand48_data {' \
-  '  unsigned short __x[3];' \
-  '  unsigned short __old_x[3];' \
-  '  unsigned short __c;' \
-  '  unsigned short __init;' \
-  '  unsigned long long __a;' \
-  '};' \
-  'static inline int srand48_r(long s, struct drand48_data *b) { srand48(s); return 0; }' \
-  'static inline int lrand48_r(struct drand48_data *b, long *r) { *r = lrand48(); return 0; }' \
-  'static inline int drand48_r(struct drand48_data *b, double *r) { *r = drand48(); return 0; }' \
-  '#endif' \
-  '#endif' > common/musl-compat.h
+# Fix archived Debian Jessie repos and install runtime dependencies
+RUN echo "deb http://archive.debian.org/debian jessie main" > /etc/apt/sources.list && \
+    apt-get -o Acquire::Check-Valid-Until=false update && \
+    apt-get install -y --allow-unauthenticated --no-install-recommends \
+        iptables kmod jq ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN CC="gcc -include /src/common/musl-compat.h -Wno-incompatible-pointer-types" \
-    make -j"$(nproc 2>/dev/null || echo 4)"
-
-# Base image: Tailscale (Alpine-based, includes iptables and iproute2)
-# Entrypoint: /usr/local/bin/containerboot
+# Copy Tailscale binaries (full containerboot + daemon + CLI)
 # https://hub.docker.com/r/tailscale/tailscale
-FROM tailscale/tailscale:latest
-
-# Runtime dependencies for MTProxy entrypoint (/run.sh)
-RUN apk add --no-cache bash curl grep jq
-
-# Copy MTProxy binary (built natively for Alpine)
-COPY --from=mtproxy /src/objs/bin/mtproto-proxy /bin/mtproto-proxy
-
-# Copy original MTProxy entrypoint script from the official image
-COPY --from=telegrammessenger/proxy:latest /run.sh /run.sh
+COPY --from=docker.io/tailscale/tailscale:latest /usr/local/bin/containerboot /usr/local/bin/containerboot
+COPY --from=docker.io/tailscale/tailscale:latest /usr/local/bin/tailscaled /usr/local/bin/tailscaled
+COPY --from=docker.io/tailscale/tailscale:latest /usr/local/bin/tailscale /usr/local/bin/tailscale
 
 # Copy ProxyT binary from the official image on GHCR
+# https://github.com/jaxxstorm/proxyt
 COPY --from=ghcr.io/jaxxstorm/proxyt:latest /ko-app/proxyt /app/proxyt
 
-# Create persistent data directory
-RUN mkdir -p /data
+# Create required directories
+RUN mkdir -p /data /var/run/tailscale /var/cache/tailscale /var/lib/tailscale
 
 # Copy startup script (orchestrates all three entrypoints)
 COPY start.sh /app/start.sh

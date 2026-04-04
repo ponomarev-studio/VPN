@@ -107,19 +107,13 @@ All persistent state is stored on a [Fly volume](https://fly.io/docs/volumes/) (
 
 ## Docker Image
 
-The image is based on [`tailscale/tailscale:latest`](https://hub.docker.com/r/tailscale/tailscale) (Alpine-based). Each service uses its original entrypoint:
+The image is based on [`telegrammessenger/proxy:latest`](https://hub.docker.com/r/telegrammessenger/proxy/) (Debian-based). Tailscale binaries (`containerboot`, `tailscaled`, `tailscale`) are copied from `tailscale/tailscale:latest` for full Tailscale bootstrap support. Each service uses its original entrypoint:
 
 | Entrypoint | Source | Purpose |
 |---|---|---|
-| `/usr/local/bin/containerboot` | Base image (`tailscale/tailscale:latest`) | Tailscale daemon (manages `tailscaled` + `tailscale up`) |
-| `/run.sh` | `telegrammessenger/proxy:latest` | MTProxy entrypoint (manages secrets, config, `mtproto-proxy`) |
+| `/usr/local/bin/containerboot` | `tailscale/tailscale:latest` | Tailscale daemon (manages `tailscaled` + `tailscale up`) |
+| `/run.sh` | Base image (`telegrammessenger/proxy:latest`) | MTProxy entrypoint (manages secrets, config, `mtproto-proxy`) |
 | `/app/proxyt` | `ghcr.io/jaxxstorm/proxyt:latest` | ProxyT HTTP proxy |
-
-Additional binary:
-
-| Binary | Source | Purpose |
-|---|---|---|
-| `/bin/mtproto-proxy` | Built from [source](https://github.com/TelegramMessenger/MTProxy) | Telegram MTProxy server (called by `/run.sh`) |
 
 ## Security
 
