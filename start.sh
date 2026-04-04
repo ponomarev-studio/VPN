@@ -18,19 +18,14 @@ TS_HOSTNAME="${TS_HOSTNAME:-${FLY_REGION:-vpn}}" \
 echo "Waiting for Tailscale..."
 until tailscale status >/dev/null 2>&1; do sleep 0.5; done
 
-# MTProxy — original entrypoint (/run.sh) in background
-IP=$(tailscale ip -4) /run.sh &
-
-# Extract Tailscale domain and log links
+# Extract Tailscale domain
 TS_DOMAIN=$(tailscale status --json | grep -o '"DNSName":"[^"]*"' | head -1 | cut -d'"' -f4 | sed 's/\.$//')
 
-echo "Tailscale: ${TS_DOMAIN}"
-echo "MTProxy: ${TS_DOMAIN}:${PORT:-443}"
+# MTProxy — original entrypoint (/run.sh) in background
+IP=$TS_DOMAIN /run.sh &
 
 # ProxyT — via Tailscale Funnel
 tailscale funnel --bg 8080
-
-echo "ProxyT: https://${PROXYT_DOMAIN:-${TS_DOMAIN}}"
 
 # ProxyT — original entrypoint (foreground)
 exec /app/proxyt serve --http-only --port 8080 --domain "${PROXYT_DOMAIN:-${TS_DOMAIN}}"
