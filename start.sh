@@ -28,6 +28,10 @@ mkdir -p "${TS_STATE_DIR}"
   --statedir="${TS_STATE_DIR}" \
   --socket="${TS_SOCKET}" &
 
+# Wait for tailscaled to be ready
+echo "Waiting for tailscaled..."
+while [ ! -S "${TS_SOCKET}" ]; do sleep 0.2; done
+
 /app/tailscale up \
   --auth-key="${TS_AUTHKEY}" \
   --hostname="${TS_HOSTNAME}" \
@@ -57,8 +61,8 @@ echo "Starting ProxyT with domain: ${PROXYT_DOMAIN}"
 # === MTProxy ===
 
 # Download proxy configs
-curl -s https://core.telegram.org/getProxySecret -o /data/proxy-secret
-curl -s https://core.telegram.org/getProxyConfig -o /data/proxy-multi.conf
+curl -sf https://core.telegram.org/getProxySecret -o /data/proxy-secret || echo "Warning: failed to download proxy-secret"
+curl -sf https://core.telegram.org/getProxyConfig -o /data/proxy-multi.conf || echo "Warning: failed to download proxy-multi.conf"
 
 # Handle secrets
 if [ -z "${SECRET}" ]; then

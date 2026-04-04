@@ -10,10 +10,9 @@ swap_size_mb = 256
   policy = "always"
 
 [[vm]]
-  cpus = 1
   memory_mb = 256
   cpu_kind = 'shared'
-  size = 'shared-cpu-1x'
+  cpus = 1
 
 [deploy]
   strategy = "immediate"
