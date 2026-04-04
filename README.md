@@ -12,11 +12,11 @@ Fly VM (single container, three original entrypoints in parallel)
   │     ├── Exit Node + SSH
   │     └── State → /data/tailscale (persistent volume)
   ├── /run.sh (background) — original MTProxy entrypoint
-  │     ├── Telegram MTProxy on 0.0.0.0:443
+  │     ├── Telegram MTProxy on 0.0.0.0:1234
   │     └── Accessible via Tailscale DNS name
   └── proxyt (foreground) — original ProxyT entrypoint
         ├── HTTP proxy on 127.0.0.1:8080
-        ├── Domain auto-detected from Tailscale
+        ├── Domain built from TS_HOSTNAME + TS_TAILNET
         └── Publicly accessible via Tailscale Funnel
 ```
 
@@ -24,8 +24,8 @@ Fly VM (single container, three original entrypoints in parallel)
 
 1. The startup script (`start.sh`) configures networking and launches all three entrypoints:
    - **Tailscale** — runs [`containerboot`](https://pkg.go.dev/tailscale.com/cmd/containerboot) (the original entrypoint from `tailscale/tailscale`) in the background. Env vars `TS_STATE_DIR`, `TS_SOCKET`, `TS_EXTRA_ARGS`, and `TS_HOSTNAME` are set inline; `TS_AUTHKEY` flows from the system environment.
-   - **MTProxy** — after Tailscale connects, runs the original [`/run.sh`](https://hub.docker.com/r/telegrammessenger/proxy/) in the background with `IP` set to the Tailscale DNS name derived from the node `DNSName`. All other MTProxy env vars (`SECRET`, `TAG`, etc.) flow from the system environment.
-   - **ProxyT** — the script sets up [Tailscale Funnel](https://tailscale.com/kb/1223/funnel), logs connection links, then `exec`s into [`proxyt`](https://github.com/jaxxstorm/proxyt) as the foreground process.
+   - **MTProxy** — runs the original [`/run.sh`](https://hub.docker.com/r/telegrammessenger/proxy/) in the background. The listen port is patched from 443 to 1234 in the Dockerfile. All MTProxy env vars (`SECRET`, `TAG`, etc.) flow from the system environment.
+   - **ProxyT** — sets up [Tailscale Funnel](https://tailscale.com/kb/1223/funnel), then `exec`s into [`proxyt`](https://github.com/jaxxstorm/proxyt) as the foreground process. Domain is built from `TS_HOSTNAME` + `TS_TAILNET` env vars.
 2. **Persistent state** is stored on a Fly volume mounted at `/data` — Tailscale identity and MTProxy secrets survive restarts.
 
 ## Prerequisites
@@ -86,13 +86,14 @@ All [official MTProxy environment variables](https://hub.docker.com/r/telegramme
 | `SECRET_COUNT` | `1` | Number of secrets to auto-generate (1–16) |
 | `TAG` | *(none)* | Advertisement tag from [@MTProxybot](https://t.me/mtproxybot) |
 | `WORKERS` | `1` | Number of MTProxy worker processes |
-| `PORT` | `443` | MTProxy listen port |
+| `PORT` | `1234` | MTProxy listen port (patched in Dockerfile) |
 
 ### ProxyT
 
 | Variable | Default | Description |
 |---|---|---|
-| `PROXYT_DOMAIN` | *(auto-detected from Tailscale)* | ProxyT domain override |
+| `TS_TAILNET` | *(required)* | Tailnet domain suffix (e.g. `tail1234.ts.net`) for building the ProxyT domain |
+| `PROXYT_DOMAIN` | `${TS_HOSTNAME}.${TS_TAILNET}` | ProxyT domain override |
 
 ## Volume
 
