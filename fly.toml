@@ -1,18 +1,18 @@
 app = 'vpn-ps'
-primary_region = 'ams'
 swap_size_mb = 256
+primary_region = 'ams'
 
 [mounts]
-  source = "vpn_data"
+  source = "vpn"
   destination = "/data"
 
 [[restart]]
   policy = "always"
 
 [[vm]]
+  cpus = 1
   memory_mb = 256
   cpu_kind = 'shared'
-  cpus = 1
 
 [deploy]
   strategy = "immediate"
