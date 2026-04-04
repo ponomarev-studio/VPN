@@ -7,7 +7,7 @@ FROM telegrammessenger/proxy:latest
 RUN echo "deb http://archive.debian.org/debian jessie main" > /etc/apt/sources.list && \
     apt-get -o Acquire::Check-Valid-Until=false update && \
     apt-get install -y --allow-unauthenticated --no-install-recommends \
-        iptables kmod jq ca-certificates && \
+        iptables kmod jq ca-certificates ethtool && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy Tailscale binaries (full containerboot + daemon + CLI)

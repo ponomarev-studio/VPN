@@ -21,6 +21,9 @@ sysctl -w net.ipv6.conf.all.forwarding=1
 iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
+# Optimize UDP GRO forwarding for Tailscale (see https://tailscale.com/s/ethtool-config-udp-gro)
+ethtool -K eth0 rx-udp-gro-forwarding on rx-gro-list off 2>/dev/null || true
+
 # Tailscale — original entrypoint (containerboot) in background
 TS_STATE_DIR=/data/tailscale \
 TS_SOCKET=/var/run/tailscale/tailscaled.sock \
