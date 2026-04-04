@@ -58,7 +58,7 @@
       "depends_on": [
         {
           "name": "tailscale",
-          "condition": "started"
+          "condition": "healthy"
         }
       ],
       "mounts": [

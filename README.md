@@ -136,11 +136,11 @@ The `cli-config.json` defines the container configuration, dependencies, health 
 
 ```
 tailscale ──(healthy)──► proxyt
-tailscale ──(started)──► mtproxy
+tailscale ──(healthy)──► mtproxy
 ```
 
 - **ProxyT** waits for Tailscale to pass its health check before starting.
-- **MTProxy** starts as soon as the Tailscale container has started.
+- **MTProxy** waits for Tailscale to pass its health check before starting.
 
 ### Shared Volumes
 
