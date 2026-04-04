@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Graceful shutdown handler
+PIDS=()
+shutdown() {
+  echo "Received shutdown signal, stopping services..."
+  for pid in "${PIDS[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -TERM "$pid" 2>/dev/null
+    fi
+  done
+  wait "${PIDS[@]}" 2>/dev/null
+  exit 0
+}
+trap shutdown SIGINT SIGTERM
+
 # Network setup for exit node
 modprobe xt_mark 2>/dev/null || true
 sysctl -w net.ipv4.ip_forward=1
@@ -14,6 +28,7 @@ TS_EXTRA_ARGS="--advertise-exit-node --ssh" \
 TS_HOSTNAME="${TS_HOSTNAME:-${FLY_REGION:-vpn}}" \
   /usr/local/bin/containerboot &
 CONTAINERBOOT_PID=$!
+PIDS+=("$CONTAINERBOOT_PID")
 
 # Wait for Tailscale to connect
 echo "Waiting for Tailscale..."
@@ -38,6 +53,7 @@ TS_DOMAIN=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
 
 # MTProxy — original entrypoint (/run.sh) in background
 IP=$TS_DOMAIN /run.sh &
+PIDS+=("$!")
 
 # ProxyT — via Tailscale Funnel
 if ! tailscale funnel --bg 8080; then
@@ -45,5 +61,11 @@ if ! tailscale funnel --bg 8080; then
   exit 1
 fi
 
-# ProxyT — original entrypoint (foreground)
-exec /app/proxyt serve --http-only --port 8080 --domain "${PROXYT_DOMAIN:-${TS_DOMAIN}}"
+# ProxyT — in background (not exec, so the shell can handle signals)
+/app/proxyt serve --http-only --port 8080 --domain "${PROXYT_DOMAIN:-${TS_DOMAIN}}" &
+PIDS+=("$!")
+
+# Wait for any tracked child to exit
+wait -n "${PIDS[@]}" 2>/dev/null
+echo "A child process exited unexpectedly, shutting down..."
+shutdown
