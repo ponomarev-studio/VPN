@@ -1,9 +1,9 @@
-app = 'vpn-ps'
+app = 'tailscale'
 swap_size_mb = 256
 primary_region = 'ams'
 
 [mounts]
-  source = "vpn"
+  source = "tailscale"
   destination = "/data"
 
 [[restart]]
