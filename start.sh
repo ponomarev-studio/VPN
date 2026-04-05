@@ -1,38 +1,20 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
-# Network setup for exit node
-modprobe xt_mark 2>/dev/null || true
-sysctl -w net.ipv4.ip_forward=1
-sysctl -w net.ipv6.conf.all.forwarding=1
+modprobe xt_mark
+
+echo 'net.ipv4.ip_forward = 1' | tee -a /etc/sysctl.conf
+echo 'net.ipv6.conf.all.forwarding = 1' | tee -a /etc/sysctl.conf
+sysctl -p /etc/sysctl.conf
+
 iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
-# Optimize UDP GRO forwarding for Tailscale (see https://tailscale.com/s/ethtool-config-udp-gro)
-ethtool -K eth0 rx-udp-gro-forwarding on rx-gro-list off 2>/dev/null || true
+tailscaled --state=/data/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock --socks5-server=:1080 --outbound-http-proxy-listen=:1080 &
+tailscale up --auth-key=${TS_AUTHKEY} --hostname=${FLY_REGION:-vpn} --advertise-exit-node --ssh --reset
 
-# Tailscale — containerboot in background
-TS_STATE_DIR=/data/tailscale \
-TS_SOCKET=/var/run/tailscale/tailscaled.sock \
-TS_EXTRA_ARGS="--advertise-exit-node --ssh" \
-TS_HOSTNAME="${TS_HOSTNAME:-${FLY_REGION:-vpn}}" \
-  /usr/local/bin/containerboot &
+tailscale funnel --bg 8080
 
-# MTProxy — original entrypoint in background
-/run.sh &
+TS_DOMAIN="${FLY_REGION:-vpn}.${TS_TAILNET}"
 
-# Wait until tailscaled is ready
-until tailscale status >/dev/null 2>&1; do
-  sleep 1
-done
-
-# Retry funnel until it succeeds
-until tailscale funnel --bg 8080; do
-  sleep 2
-done
-
-# ProxyT domain from components
-TS_DOMAIN="${TS_HOSTNAME:-${FLY_REGION:-vpn}}.${TS_TAILNET}"
-
-# ProxyT — foreground
-exec /app/proxyt serve --http-only --port 8080 --domain "${PROXYT_DOMAIN:-${TS_DOMAIN}}"
+exec proxyt serve --http-only --port 8080 --domain "${PROXYT_DOMAIN:-${TS_DOMAIN}}"
