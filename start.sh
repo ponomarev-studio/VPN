@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Network setup for exit node
 modprobe xt_mark 2>/dev/null || true
@@ -20,11 +21,18 @@ TS_HOSTNAME="${TS_HOSTNAME:-${FLY_REGION:-vpn}}" \
 # MTProxy — original entrypoint in background
 /run.sh &
 
+# Wait until tailscaled is ready
+until tailscale status >/dev/null 2>&1; do
+  sleep 1
+done
+
+# Retry funnel until it succeeds
+until tailscale funnel --bg 8080; do
+  sleep 2
+done
+
 # ProxyT domain from components
 TS_DOMAIN="${TS_HOSTNAME:-${FLY_REGION:-vpn}}.${TS_TAILNET}"
-
-# Tailscale Funnel for ProxyT
-tailscale funnel --bg 8080
 
 # ProxyT — foreground
 exec /app/proxyt serve --http-only --port 8080 --domain "${PROXYT_DOMAIN:-${TS_DOMAIN}}"

@@ -1,5 +1,5 @@
 app = 'tailscale'
-swap_size_mb = 256
+swap_size_mb = 4096
 primary_region = 'ams'
 
 [mounts]
