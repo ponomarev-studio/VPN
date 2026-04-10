@@ -12,7 +12,7 @@ ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
 tailscaled --state=/data/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock --tun=userspace-networking --socks5-server=:1080 --outbound-http-proxy-listen=:1080 &
 tailscale up --auth-key=${TS_AUTHKEY} --hostname=${TS_HOSTNAME:-cloud-ru} --advertise-exit-node --ssh --reset
-tailscale web --readonly --listen 0.0.0.0:8080
+tailscale web --readonly --listen 0.0.0.0:8080 &
 
 tailscale funnel --bg 3000
 
