@@ -1,0 +1,45 @@
+name: Sync Tailscale ACLs
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  acls:
+    permissions:
+      contents: read
+      id-token: write # This is required for the Tailscale action to request a JWT from GitHub
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Fetch version-cache.json
+        uses: actions/cache@v5
+        with:
+          path: ./version-cache.json
+          key: version-cache.json-${{ github.run_id }}
+          restore-keys: |
+            version-cache.json-
+
+      - name: Deploy ACL
+        if: github.event_name == 'push'
+        id: deploy-acl
+        uses: tailscale/gitops-acl-action@v1
+        with:
+          oauth-client-id: ${{ vars.TS_OAUTH_ID }}
+          audience: ${{ vars.TS_AUDIENCE }}
+          tailnet: ${{ vars.TS_TAILNET }}
+          action: apply
+
+      - name: Test ACL
+        if: github.event_name == 'pull_request'
+        id: test-acl
+        uses: tailscale/gitops-acl-action@v1
+        with:
+          oauth-client-id: ${{ vars.TS_OAUTH_ID }}
+          audience: ${{ vars.TS_AUDIENCE }}
+          tailnet: ${{ vars.TS_TAILNET }}
+          action: test
