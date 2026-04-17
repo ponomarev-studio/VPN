@@ -8,6 +8,9 @@ on:
     branches: ["main"]
     paths: ["**.hujson"]
 
+permissions:
+  contents: read
+
 jobs:
   format:
     runs-on: ubuntu-latest
@@ -24,12 +27,12 @@ jobs:
 
       - name: Check formatting
         run: |
-          unformatted=$(hujsonfmt -l *.hujson)
+          unformatted=$(find . -name '*.hujson' -not -path './.git/*' -exec hujsonfmt -l {} +)
           if [ -n "$unformatted" ]; then
             echo "The following files are not formatted:"
             echo "$unformatted"
             echo ""
             echo "Run 'hujsonfmt -w' to format them:"
-            hujsonfmt -d *.hujson
+            find . -name '*.hujson' -not -path './.git/*' -exec hujsonfmt -d {} +
             exit 1
           fi
