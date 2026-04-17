@@ -3,9 +3,9 @@
 	"derpMap": {
 		"Regions": {
 			"901": {
-				"RegionID":        901,
-				"RegionCode":      "mow",
-				"RegionName":      "Moscow",
+				"RegionID":   901,
+				"RegionCode": "mow",
+				"RegionName": "Moscow",
 				// "NoMeasureNoHome": true,
 
 				"Nodes": [
