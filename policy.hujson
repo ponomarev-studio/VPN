@@ -6,7 +6,7 @@
 				"RegionID":        901,
 				"RegionCode":      "mow",
 				"RegionName":      "Moscow",
-				"NoMeasureNoHome": true,
+				// "NoMeasureNoHome": true,
 
 				"Nodes": [
 					{
