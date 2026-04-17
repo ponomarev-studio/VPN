@@ -55,9 +55,13 @@
 	],
 
 	"nodeAttrs": [
-		{
+        {
 			"target": ["*"],
 			"attr":   ["funnel"],
+        },
+
+        {
+            "target": ["tag:vpn"],
 
 			"app": {
 				"tailscale.com/app-connectors": [
