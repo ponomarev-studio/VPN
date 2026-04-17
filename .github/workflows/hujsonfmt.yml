@@ -1,0 +1,38 @@
+name: Format HuJSON
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["**.hujson"]
+  pull_request:
+    branches: ["main"]
+    paths: ["**.hujson"]
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install hujsonfmt
+        run: go install github.com/tailscale/hujson/cmd/hujsonfmt@latest
+
+      - name: Check formatting
+        run: |
+          unformatted=$(find . -name '*.hujson' -not -path './.git/*' -exec hujsonfmt -l {} +)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not formatted:"
+            echo "$unformatted"
+            echo ""
+            echo "Run 'hujsonfmt -w' to format them:"
+            find . -name '*.hujson' -not -path './.git/*' -exec hujsonfmt -d {} +
+            exit 1
+          fi
