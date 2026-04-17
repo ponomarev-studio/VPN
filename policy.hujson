@@ -1,35 +1,35 @@
 // Example/default ACLs for unrestricted connections.
 {
-  "derpMap": {
-    "Regions": {
-      "901": {
-        "RegionID": 901,
-        "RegionCode": "mow",
-		"RegionName": "Moscow",
-        "Nodes": [
-          {
-            "Name": "mow",
-            "RegionID": 901,
-            "HostName": "mow.derp.ponomarev.studio",
-            "IPv4": "91.224.87.7",
-          }
-        ]
-      }
-    },
-      "902": {
-        "RegionID": 902,
-        "RegionCode": "aah",
-		"RegionName": "Aachen",
-        "Nodes": [
-          {
-            "Name": "aah",
-            "RegionID": 902,
-            "HostName": "aah.derp.ponomarev.studio",
-            "IPv4": "92.42.45.218",
-          }
-        ]
-      }
-  }
+	"derpMap": {
+		"Regions": {
+			"901": {
+				"RegionID":   901,
+				"RegionCode": "mow",
+				"RegionName": "Moscow",
+				"Nodes": [
+					{
+						"Name":     "mow",
+						"RegionID": 901,
+						"HostName": "mow.derp.ponomarev.studio",
+						"IPv4":     "91.224.87.7",
+					},
+				],
+			},
+			"902": {
+				"RegionID":   902,
+				"RegionCode": "aah",
+				"RegionName": "Aachen",
+				"Nodes": [
+					{
+						"Name":     "aah",
+						"RegionID": 902,
+						"HostName": "aah.derp.ponomarev.studio",
+						"IPv4":     "92.42.45.218",
+					},
+				],
+			},
+		},
+	},
 	// Declare static groups of users. Use autogroups for all users or users with a specific role.
 	// "groups": {
 	//   "group:example": ["alice@example.com", "bob@example.com"],
