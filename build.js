@@ -1,4 +1,4 @@
-import {readFileSync, writeFileSync} from "node:fs";
+import {readFileSync, writeFileSync, appendFileSync} from "node:fs";
 import {mergeCidr, overlapCidr} from "cidr-tools";
 
 const POLICY_FILE = "policy.hujson";
@@ -62,7 +62,38 @@ async function main() {
 
     // Ensure ru and eu CIDR lists don't overlap
     if (overlapCidr(loaded.ru, loaded.eu)) {
-        throw new Error("CIDR conflict: ru and eu segments overlap");
+        const ruOverlaps = loaded.ru.filter((c) => overlapCidr([c], loaded.eu));
+        const euOverlaps = loaded.eu.filter((c) => overlapCidr([c], loaded.ru));
+        const total = ruOverlaps.length + euOverlaps.length;
+
+        const lines = [
+            `CIDR conflict: ru and eu segments overlap (${total} overlapping CIDRs)`,
+            `  ru → eu: ${ruOverlaps.length} CIDRs`,
+            ...ruOverlaps.slice(0, 10).map((c) => `    ${c}`),
+            ...(ruOverlaps.length > 10 ? [`    … and ${ruOverlaps.length - 10} more`] : []),
+            `  eu → ru: ${euOverlaps.length} CIDRs`,
+            ...euOverlaps.slice(0, 10).map((c) => `    ${c}`),
+            ...(euOverlaps.length > 10 ? [`    … and ${euOverlaps.length - 10} more`] : []),
+        ];
+        console.error(lines.join("\n"));
+
+        // Write summary to GitHub Actions Job Summary if available
+        if (process.env.GITHUB_STEP_SUMMARY) {
+            const md = [
+                "## ⚠️ CIDR Overlap Detected",
+                "",
+                `**Total overlapping CIDRs:** ${total}`,
+                "",
+                `### ru → eu (${ruOverlaps.length})`,
+                ...ruOverlaps.map((c) => `- \`${c}\``),
+                "",
+                `### eu → ru (${euOverlaps.length})`,
+                ...euOverlaps.map((c) => `- \`${c}\``),
+            ];
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, md.join("\n") + "\n");
+        }
+
+        throw new Error(`CIDR conflict: ru and eu segments overlap (${total} overlapping CIDRs)`);
     }
 
     for (const [name, cidrs] of Object.entries(loaded)) {
