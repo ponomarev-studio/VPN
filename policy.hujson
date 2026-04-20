@@ -115,7 +115,7 @@
             "connectors": [
               "tag:ru"
             ],
-			"domains": [],
+			"domains": ["ru.invalid"],
             "routes": [
               "2.63.0.0/17",
               "2.63.128.0/18",
@@ -30104,7 +30104,7 @@
             "connectors": [
               "tag:eu"
             ],
-			"domains": [],
+			"domains": ["eu.invalid"],
             "routes": [
               "1.0.0.0/24",
               "1.1.1.0/24",
