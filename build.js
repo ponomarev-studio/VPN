@@ -64,10 +64,9 @@ async function main() {
     if (overlapCidr(loaded.ru, loaded.eu)) {
         const ruOverlaps = loaded.ru.filter((c) => overlapCidr([c], loaded.eu));
         const euOverlaps = loaded.eu.filter((c) => overlapCidr([c], loaded.ru));
-        const total = ruOverlaps.length + euOverlaps.length;
 
         const lines = [
-            `CIDR conflict: ru and eu segments overlap (${total} overlapping CIDRs)`,
+            `CIDR conflict: ru and eu segments overlap (${ruOverlaps.length} from ru, ${euOverlaps.length} from eu)`,
             `  ru → eu: ${ruOverlaps.length} CIDRs`,
             ...ruOverlaps.slice(0, 10).map((c) => `    ${c}`),
             ...(ruOverlaps.length > 10 ? [`    … and ${ruOverlaps.length - 10} more`] : []),
@@ -82,18 +81,20 @@ async function main() {
             const md = [
                 "## ⚠️ CIDR Overlap Detected",
                 "",
-                `**Total overlapping CIDRs:** ${total}`,
+                `**Overlapping CIDRs:** ${ruOverlaps.length} from ru, ${euOverlaps.length} from eu`,
                 "",
                 `### ru → eu (${ruOverlaps.length})`,
-                ...ruOverlaps.map((c) => `- \`${c}\``),
+                ...ruOverlaps.slice(0, 25).map((c) => `- \`${c}\``),
+                ...(ruOverlaps.length > 25 ? [`- … and ${ruOverlaps.length - 25} more`] : []),
                 "",
                 `### eu → ru (${euOverlaps.length})`,
-                ...euOverlaps.map((c) => `- \`${c}\``),
+                ...euOverlaps.slice(0, 25).map((c) => `- \`${c}\``),
+                ...(euOverlaps.length > 25 ? [`- … and ${euOverlaps.length - 25} more`] : []),
             ];
             appendFileSync(process.env.GITHUB_STEP_SUMMARY, md.join("\n") + "\n");
         }
 
-        throw new Error(`CIDR conflict: ru and eu segments overlap (${total} overlapping CIDRs)`);
+        throw new Error(`CIDR conflict: ru and eu segments overlap (${ruOverlaps.length} from ru, ${euOverlaps.length} from eu)`);
     }
 
     for (const [name, cidrs] of Object.entries(loaded)) {
