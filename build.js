@@ -1,5 +1,5 @@
 import {readFileSync, writeFileSync} from "node:fs";
-import {mergeCidr} from "cidr-tools";
+import {mergeCidr, overlapCidr} from "cidr-tools";
 
 const POLICY_FILE = "policy.hujson";
 const FETCH_TIMEOUT_MS = 30_000;
@@ -53,12 +53,22 @@ async function main() {
     const connectors =
         policy.nodeAttrs[0].app["tailscale.com/app-connectors"];
 
+    // Load and merge CIDRs for each segment (mergeCidr returns sorted results)
+    const loaded = {};
     for (const [name, sources] of Object.entries(segments)) {
-        const cidrs = await loadSegment(sources);
+        loaded[name] = await loadSegment(sources);
+        console.log(`${name}: ${loaded[name].length} CIDRs`);
+    }
+
+    // Ensure ru and eu CIDR lists don't overlap
+    if (overlapCidr(loaded.ru, loaded.eu)) {
+        throw new Error("CIDR conflict: ru and eu segments overlap");
+    }
+
+    for (const [name, cidrs] of Object.entries(loaded)) {
         const connector = connectors.find((c) => c.name === name);
         if (!connector) throw new Error(`Connector "${name}" not found in ${POLICY_FILE}`);
         connector.routes = cidrs;
-        console.log(`${name}: ${cidrs.length} CIDRs`);
     }
 
     writeFileSync(POLICY_FILE, JSON.stringify(policy, null, 2) + "\n");
