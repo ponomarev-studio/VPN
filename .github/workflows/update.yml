@@ -49,7 +49,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes"
           else
-            git commit -m "Update policy.hujson ($(date +'%Y-%m-%d %H:%M'))"
+            git commit -m "Update policy.hujson ($(date -u +'%Y-%m-%d %H:%M UTC'))"
             git push
           fi
 
