@@ -1,5 +1,5 @@
 import {readFileSync, writeFileSync, appendFileSync} from "node:fs";
-import {mergeCidr, overlapCidr} from "cidr-tools";
+import {mergeCidr, overlapCidr, excludeCidr} from "cidr-tools";
 
 const POLICY_FILE = "policy.hujson";
 const FETCH_TIMEOUT_MS = 30_000;
@@ -62,8 +62,14 @@ async function main() {
 
     // Ensure ru and eu CIDR lists don't overlap
     if (overlapCidr(loaded.ru, loaded.eu)) {
-        const ruOverlaps = loaded.ru.filter((c) => overlapCidr([c], loaded.eu));
-        const euOverlaps = loaded.eu.filter((c) => overlapCidr([c], loaded.ru));
+        // Find which CIDRs overlap efficiently using bulk excludeCidr (2 calls)
+        // instead of per-CIDR overlapCidr which is O(n*m).
+        // excludeCidr returns parts of A not covered by B — any original CIDR
+        // missing from the result overlaps with the other segment.
+        const ruOnlySet = new Set(excludeCidr(loaded.ru, loaded.eu));
+        const euOnlySet = new Set(excludeCidr(loaded.eu, loaded.ru));
+        const ruOverlaps = loaded.ru.filter((c) => !ruOnlySet.has(c));
+        const euOverlaps = loaded.eu.filter((c) => !euOnlySet.has(c));
 
         const lines = [
             `CIDR conflict: ru and eu segments overlap (${ruOverlaps.length} from ru, ${euOverlaps.length} from eu)`,
