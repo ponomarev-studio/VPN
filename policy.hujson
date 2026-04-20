@@ -116,7 +116,13 @@
               "tag:ru"
             ],
             "domains": [
-              "ru.invalid"
+              "ru.invalid",
+					"ipv4-internet.yandex.net",
+					"ipv6-internet.yandex.net",
+					"ifconfig.me",
+					"api.ipify.org",
+					"checkip.amazonaws.com",
+					"ip.mail.ru"
             ],
             "routes": [
               "2.63.0.0/17",
