@@ -82,7 +82,11 @@ async function main() {
         const removeFromRu = new Set();
         const removeFromEu = new Set();
         for (const cidr of resolved) {
-            if (overrides[cidr] === "ru") {
+            const seg = overrides[cidr];
+            if (seg !== "ru" && seg !== "eu") {
+                throw new Error(`Invalid segment "${seg}" for ${cidr} in ${OVERRIDES_FILE} (expected "ru" or "eu")`);
+            }
+            if (seg === "ru") {
                 removeFromEu.add(cidr);
             } else {
                 removeFromRu.add(cidr);
