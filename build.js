@@ -1,7 +1,8 @@
 import {readFileSync, writeFileSync, appendFileSync} from "node:fs";
-import {mergeCidr, overlapCidr, excludeCidr} from "cidr-tools";
+import {mergeCidr} from "cidr-tools";
 
 const POLICY_FILE = "policy.hujson";
+const OVERRIDES_FILE = "overrides.json";
 const FETCH_TIMEOUT_MS = 30_000;
 
 const GEOIP_TEXT_BASE =
@@ -49,6 +50,7 @@ async function loadSegment(sources) {
 
 async function main() {
     const policy = JSON.parse(readFileSync(POLICY_FILE, "utf-8"));
+    const overrides = JSON.parse(readFileSync(OVERRIDES_FILE, "utf-8"));
 
     const connectors =
         policy.nodeAttrs[0].app["tailscale.com/app-connectors"];
@@ -60,47 +62,71 @@ async function main() {
         console.log(`${name}: ${loaded[name].length} CIDRs`);
     }
 
-    // Ensure ru and eu CIDR lists don't overlap
-    if (overlapCidr(loaded.ru, loaded.eu)) {
-        // Find which CIDRs overlap efficiently using bulk excludeCidr (2 calls)
-        // instead of per-CIDR overlapCidr which is O(n*m).
-        // excludeCidr returns parts of A not covered by B — any original CIDR
-        // missing from the result overlaps with the other segment.
-        const ruOnlySet = new Set(excludeCidr(loaded.ru, loaded.eu));
-        const euOnlySet = new Set(excludeCidr(loaded.eu, loaded.ru));
-        const ruOverlaps = loaded.ru.filter((c) => !ruOnlySet.has(c));
-        const euOverlaps = loaded.eu.filter((c) => !euOnlySet.has(c));
+    // Find exact-duplicate CIDRs present in both segments
+    const ruSet = new Set(loaded.ru);
+    const duplicates = loaded.eu.filter((c) => ruSet.has(c));
 
-        const lines = [
-            `CIDR conflict: ru and eu segments overlap (${ruOverlaps.length} from ru, ${euOverlaps.length} from eu)`,
-            `  ru → eu: ${ruOverlaps.length} CIDRs`,
-            ...ruOverlaps.slice(0, 10).map((c) => `    ${c}`),
-            ...(ruOverlaps.length > 10 ? [`    … and ${ruOverlaps.length - 10} more`] : []),
-            `  eu → ru: ${euOverlaps.length} CIDRs`,
-            ...euOverlaps.slice(0, 10).map((c) => `    ${c}`),
-            ...(euOverlaps.length > 10 ? [`    … and ${euOverlaps.length - 10} more`] : []),
-        ];
-        console.error(lines.join("\n"));
-
-        // Write summary to GitHub Actions Job Summary if available
-        if (process.env.GITHUB_STEP_SUMMARY) {
-            const md = [
-                "## ⚠️ CIDR Overlap Detected",
-                "",
-                `**Overlapping CIDRs:** ${ruOverlaps.length} from ru, ${euOverlaps.length} from eu`,
-                "",
-                `### ru → eu (${ruOverlaps.length})`,
-                ...ruOverlaps.slice(0, 25).map((c) => `- \`${c}\``),
-                ...(ruOverlaps.length > 25 ? [`- … and ${ruOverlaps.length - 25} more`] : []),
-                "",
-                `### eu → ru (${euOverlaps.length})`,
-                ...euOverlaps.slice(0, 25).map((c) => `- \`${c}\``),
-                ...(euOverlaps.length > 25 ? [`- … and ${euOverlaps.length - 25} more`] : []),
-            ];
-            appendFileSync(process.env.GITHUB_STEP_SUMMARY, md.join("\n") + "\n");
+    if (duplicates.length > 0) {
+        // Split duplicates into resolved (present in overrides) and unresolved
+        const resolved = [];
+        const unresolved = [];
+        for (const cidr of duplicates) {
+            if (cidr in overrides) {
+                resolved.push(cidr);
+            } else {
+                unresolved.push(cidr);
+            }
         }
 
-        throw new Error(`CIDR conflict: ru and eu segments overlap (${ruOverlaps.length} from ru, ${euOverlaps.length} from eu)`);
+        // Apply overrides: keep CIDR in the designated segment, remove from the other
+        const removeFromRu = new Set();
+        const removeFromEu = new Set();
+        for (const cidr of resolved) {
+            if (overrides[cidr] === "ru") {
+                removeFromEu.add(cidr);
+            } else {
+                removeFromRu.add(cidr);
+            }
+        }
+
+        // Unresolved duplicates are removed from both segments
+        for (const cidr of unresolved) {
+            removeFromRu.add(cidr);
+            removeFromEu.add(cidr);
+        }
+
+        loaded.ru = loaded.ru.filter((c) => !removeFromRu.has(c));
+        loaded.eu = loaded.eu.filter((c) => !removeFromEu.has(c));
+
+        // Log resolved overrides
+        if (resolved.length > 0) {
+            console.log(`Resolved ${resolved.length} duplicate CIDRs via overrides:`);
+            for (const cidr of resolved) {
+                console.log(`  ${cidr} → ${overrides[cidr]}`);
+            }
+        }
+
+        // Report unresolved duplicates
+        if (unresolved.length > 0) {
+            console.warn(
+                `Removed ${unresolved.length} unresolved duplicate CIDRs from both segments:`
+            );
+            for (const cidr of unresolved) {
+                console.warn(`  ${cidr}`);
+            }
+
+            if (process.env.GITHUB_STEP_SUMMARY) {
+                const md = [
+                    "## ⚠️ Unresolved CIDR Duplicates",
+                    "",
+                    `**${unresolved.length}** exact-duplicate CIDRs found in both ru and eu segments were removed from both.`,
+                    "Add them to `overrides.json` to assign a preferred segment.",
+                    "",
+                    ...unresolved.map((c) => `- \`${c}\``),
+                ];
+                appendFileSync(process.env.GITHUB_STEP_SUMMARY, md.join("\n") + "\n");
+            }
+        }
     }
 
     for (const [name, cidrs] of Object.entries(loaded)) {
