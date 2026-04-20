@@ -1,0 +1,70 @@
+name: Update policy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install hujsonfmt
+        run: go install github.com/tailscale/hujson/cmd/hujsonfmt@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CIDR and update policy
+        run: npm run build
+
+      - name: Format policy.hujson
+        run: hujsonfmt -w policy.hujson
+
+      - name: Commit and push
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add policy.hujson
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Update policy.hujson ($(date +'%Y-%m-%d %H:%M'))"
+            git push
+          fi
+
+      - name: Fetch version-cache.json
+        uses: actions/cache@v4
+        with:
+          path: ./version-cache.json
+          key: version-cache.json-${{ github.run_id }}
+          restore-keys: |
+            version-cache.json-
+
+      - name: Deploy ACL to Tailscale
+        uses: tailscale/gitops-acl-action@v1
+        with:
+          oauth-client-id: ${{ vars.TS_OAUTH_ID }}
+          audience: ${{ vars.TS_AUDIENCE }}
+          tailnet: ${{ vars.TS_TAILNET }}
+          action: apply

@@ -1,0 +1,14 @@
+{
+  "name": "russia-v2ray-rules-dat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "cidr-tools": "^11.3.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
