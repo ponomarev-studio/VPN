@@ -11,7 +11,7 @@ const GEOIP_TEXT_BASE =
 const segments = {
     ru: ["ru-whitelist", "yandex"],
     eu: [
-        "ru-blocked",
+        // "ru-blocked",
         "ru-blocked-community",
         "re-filter",
         "cloudflare",
