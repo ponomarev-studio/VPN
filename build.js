@@ -66,6 +66,35 @@ function validateRoutes(routes, name) {
     }
 }
 
+// Returns [aCidr, bCidr] for the first overlapping pair (containment or
+// equality) between two CIDR lists, or null. Runs per-IP-version in O(n+m)
+// using a sorted-merge over parsed [start,end] ranges.
+function findCidrOverlap(aList, bList) {
+    for (const v of [4, 6]) {
+        const a = aList
+            .filter((c) => (isV6(c) ? 6 : 4) === v)
+            .map((c) => {
+                const p = parseCidr(c);
+                return [p.start, p.end, c];
+            })
+            .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
+        const b = bList
+            .filter((c) => (isV6(c) ? 6 : 4) === v)
+            .map((c) => {
+                const p = parseCidr(c);
+                return [p.start, p.end, c];
+            })
+            .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
+        let i = 0, j = 0;
+        while (i < a.length && j < b.length) {
+            if (a[i][1] < b[j][0]) { i++; continue; }
+            if (b[j][1] < a[i][0]) { j++; continue; }
+            return [a[i][2], b[j][2]];
+        }
+    }
+    return null;
+}
+
 async function main() {
     const policy = JSON5.parse(readFileSync(POLICY_FILE, "utf-8"));
 
@@ -99,20 +128,25 @@ async function main() {
     validateRoutes(ruRoutes, "ru");
     validateRoutes(euRoutes, "eu");
 
-    // No exact-duplicate CIDRs between ru and eu.
-    const ruSet = new Set(ruRoutes);
-    const dupes = euRoutes.filter((c) => ruSet.has(c));
-    if (dupes.length > 0) {
-        throw new Error(
-            `eu and ru share ${dupes.length} exact duplicate CIDR(s), e.g. ${dupes.slice(0, 5).join(", ")}`,
-        );
+    // RU and EU must be fully disjoint, including containment overlaps
+    // (e.g. RU=1.2.0.0/16 and EU=1.2.3.0/24). Use a sorted-merge scan over
+    // parsed [start,end] ranges so this stays O(n+m) instead of O(n*m).
+    const overlap = findCidrOverlap(ruRoutes, euRoutes);
+    if (overlap) {
+        throw new Error(`eu and ru overlap: ${overlap[0]} <> ${overlap[1]}`);
     }
 
-    // EU must not contain the listed technical ranges (exact match).
-    const techSet = new Set(IPV4_TECHNICAL);
+    // EU must not overlap any listed IPv4 technical/special-use range
+    // (either contained by or containing one of them).
     for (const c of euRoutes) {
-        if (techSet.has(c)) {
-            throw new Error(`eu contains technical/special-use CIDR ${c}`);
+        if (isV6(c)) continue;
+        const tech = IPV4_TECHNICAL.find(
+            (t) => containsCidr(t, c) || containsCidr(c, t),
+        );
+        if (tech) {
+            throw new Error(
+                `eu contains technical/special-use CIDR ${c} (overlaps ${tech})`,
+            );
         }
     }
 

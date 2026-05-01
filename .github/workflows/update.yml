@@ -24,11 +24,23 @@ jobs:
       - name: Build CIDR and update policy
         run: bun run build.js
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install hujsonfmt
+        run: go install github.com/tailscale/hujson/cmd/hujsonfmt@latest
+
+      - name: Format policy.hujson
+        run: hujsonfmt -w policy.hujson
+
       - name: Fetch version-cache.json
         uses: actions/cache@v4
         with:
           path: ./version-cache.json
-          key: version-cache.json-${{ github.run_id }}
+          key: version-cache.json-${{ github.ref_name }}
           restore-keys: |
             version-cache.json-
 
