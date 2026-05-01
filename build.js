@@ -105,7 +105,26 @@ async function main() {
     if (!ruConn) throw new Error(`Connector "ru" not found in ${POLICY_FILE}`);
     if (!euConn) throw new Error(`Connector "eu" not found in ${POLICY_FILE}`);
 
-    // ---- RU: IPverse Russia IPv4 + IPv6 ----
+    // ---- DERP node IPs must NOT be tunneled via app-connectors,
+    //      otherwise Tailscale clients lose their DERP relay.
+    //      Subtract them from both ru and eu as host routes.
+    const derpV4 = [];
+    const derpV6 = [];
+    const regions = policy.derpMap?.Regions ?? {};
+    for (const region of Object.values(regions)) {
+        for (const node of region?.Nodes ?? []) {
+            if (node?.IPv4) derpV4.push(`${node.IPv4}/32`);
+            if (node?.IPv6) derpV6.push(`${node.IPv6}/128`);
+        }
+    }
+    if (derpV4.length || derpV6.length) {
+        console.log(
+            `derp exclusions: ${derpV4.length} v4 + ${derpV6.length} v6 ` +
+            `(${[...derpV4, ...derpV6].join(", ")})`,
+        );
+    }
+
+    // ---- RU: IPverse Russia IPv4 + IPv6, minus DERP host IPs ----
     const [ruV4Raw, ruV6Raw] = await Promise.all([
         downloadCIDRs(RU_IPV4_URL),
         downloadCIDRs(RU_IPV6_URL),
@@ -113,14 +132,19 @@ async function main() {
     if (ruV4Raw.length === 0) throw new Error("IPverse RU IPv4 list is empty");
     if (ruV6Raw.length === 0) throw new Error("IPverse RU IPv6 list is empty");
 
-    const ruV4 = mergeCidr(ruV4Raw);
-    const ruV6 = mergeCidr(ruV6Raw);
+    const ruV4Full = mergeCidr(ruV4Raw);
+    const ruV6Full = mergeCidr(ruV6Raw);
+    const ruV4 = derpV4.length ? excludeCidr(ruV4Full, derpV4) : ruV4Full;
+    const ruV6 = derpV6.length ? excludeCidr(ruV6Full, derpV6) : ruV6Full;
     const ruRoutes = mergeCidr([...ruV4, ...ruV6]);
     console.log(`ru: ${ruRoutes.length} CIDRs (${ruV4.length} v4 + ${ruV6.length} v6)`);
 
-    // ---- EU: Public Internet - Technical Ranges - RU ----
-    const euV4 = excludeCidr([IPV4_BASE], [...IPV4_TECHNICAL, ...ruV4]);
-    const euV6 = excludeCidr([IPV6_BASE], ruV6);
+    // ---- EU: Public Internet - Technical Ranges - RU - DERP ----
+    const euV4 = excludeCidr(
+        [IPV4_BASE],
+        [...IPV4_TECHNICAL, ...ruV4Full, ...derpV4],
+    );
+    const euV6 = excludeCidr([IPV6_BASE], [...ruV6Full, ...derpV6]);
     const euRoutes = mergeCidr([...euV4, ...euV6]);
     console.log(`eu: ${euRoutes.length} CIDRs (${euV4.length} v4 + ${euV6.length} v6)`);
 
@@ -154,6 +178,21 @@ async function main() {
     for (const c of euRoutes) {
         if (isV6(c) && !containsCidr(IPV6_BASE, c)) {
             throw new Error(`eu IPv6 CIDR ${c} is outside ${IPV6_BASE}`);
+        }
+    }
+
+    // DERP node IPs must not be covered by any ru/eu route, so that
+    // traffic to relays continues over the regular Tailscale path.
+    for (const derp of [...derpV4, ...derpV6]) {
+        for (const [name, routes] of [["ru", ruRoutes], ["eu", euRoutes]]) {
+            const hit = routes.find(
+                (r) => isV6(r) === isV6(derp) && containsCidr(r, derp),
+            );
+            if (hit) {
+                throw new Error(
+                    `${name} contains DERP IP ${derp} (covered by ${hit})`,
+                );
+            }
         }
     }
 
