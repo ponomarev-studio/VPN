@@ -15,9 +15,9 @@
 				]
 			},
 			"902": {
-				"RegionID":        902,
-				"RegionCode":      "aah",
-				"RegionName":      "Aachen",
+				"RegionID":   902,
+				"RegionCode": "aah",
+				"RegionName": "Aachen",
 				"Nodes": [
 					{
 						"Name":     "aah",
