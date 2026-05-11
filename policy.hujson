@@ -18,6 +18,7 @@
 				"RegionID":   902,
 				"RegionCode": "aah",
 				"RegionName": "Aachen",
+				"NoMeasureNoHome": true,
 				"Nodes": [
 					{
 						"Name":     "aah",
