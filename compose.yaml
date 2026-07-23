@@ -1,0 +1,53 @@
+services:
+  tailscale:
+    build: .
+    hostname: tailscale
+    container_name: tailscale
+
+    environment:
+      TS_HOSTNAME: tailscale
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_TAILNET: ${TS_TAILNET}
+      PROXYT_PORT: 3000
+
+    restart: unless-stopped
+
+  ams:
+    build: .
+    hostname: ams
+    container_name: ams
+
+    environment:
+      TS_HOSTNAME: ams
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_TAILNET: ${TS_TAILNET}
+      PROXYT_PORT: 3000
+
+    restart: unless-stopped
+
+  fra:
+    build: .
+    hostname: fra
+    container_name: fra
+
+    environment:
+      TS_HOSTNAME: fra
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_TAILNET: ${TS_TAILNET}
+      PROXYT_PORT: 3000
+
+    restart: unless-stopped
+
+  arn:
+    build: .
+    hostname: arn
+    container_name: arn
+
+    environment:
+      TS_HOSTNAME: arn
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_TAILNET: ${TS_TAILNET}
+      PROXYT_PORT: 3000
+
+    restart: unless-stopped
+
