@@ -8,7 +8,6 @@ services:
       TS_HOSTNAME: tailscale
       TS_AUTHKEY: ${TS_AUTHKEY}
       TS_TAILNET: ${TS_TAILNET}
-      PROXYT_PORT: 3000
 
     restart: unless-stopped
 
@@ -21,7 +20,6 @@ services:
       TS_HOSTNAME: ams
       TS_AUTHKEY: ${TS_AUTHKEY}
       TS_TAILNET: ${TS_TAILNET}
-      PROXYT_PORT: 3000
 
     restart: unless-stopped
 
@@ -34,7 +32,6 @@ services:
       TS_HOSTNAME: fra
       TS_AUTHKEY: ${TS_AUTHKEY}
       TS_TAILNET: ${TS_TAILNET}
-      PROXYT_PORT: 3000
 
     restart: unless-stopped
 
@@ -47,7 +44,6 @@ services:
       TS_HOSTNAME: arn
       TS_AUTHKEY: ${TS_AUTHKEY}
       TS_TAILNET: ${TS_TAILNET}
-      PROXYT_PORT: 3000
 
     restart: unless-stopped
 
