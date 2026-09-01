@@ -5,7 +5,7 @@
 				"RegionID":        901,
 				"RegionCode":      "mow",
 				"RegionName":      "Moscow",
-				"NoMeasureNoHome": true,
+				// "NoMeasureNoHome": true,
 				"Nodes": [
 					{
 						"Name":     "mow",
@@ -19,7 +19,7 @@
 				"RegionID":        902,
 				"RegionCode":      "aah",
 				"RegionName":      "Aachen",
-				"NoMeasureNoHome": true,
+				// "NoMeasureNoHome": true,
 				"Nodes": [
 					{
 						"Name":     "aah",
