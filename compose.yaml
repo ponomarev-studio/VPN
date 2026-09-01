@@ -46,4 +46,3 @@ services:
       TS_TAILNET: ${TS_TAILNET}
 
     restart: unless-stopped
-

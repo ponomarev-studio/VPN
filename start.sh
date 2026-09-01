@@ -19,6 +19,8 @@ proxyt serve \
 
 sleep 1
 
+tailscale debug force-prefer-derp 14
+
 tailscale funnel --bg 3000
 
 wait
